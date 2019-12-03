@@ -2,7 +2,23 @@
 CloudGenix Alert Acknowledgment script
 ---------------------------------------
 
+cg-ack-alerts.py
+
+USAGE:
+  -h, --help            show this help message and exit
+  --token "MYTOKEN", -t "MYTOKEN"
+                        specify an authtoken to use for CloudGenix authentication
+  --authtokenfile "MYTOKENFILE.TXT", -f "MYTOKENFILE.TXT"
+                        a file containing the authtoken
+  --limit NUMBER_OF_EVENTS, -l NUMBER_OF_EVENTS
+                        The max number of events to ack. Default 0 (UNLIMITED)
+
 This script will indiscriminately acknowledge all un-acknowledged alerts present on a users system.
+
+A maxmum number of alerts to acknowledge may be set using the LIMIT parameter. It is recommended that this
+be set to a low number for testing purposes to ensure the correct tenant is set.
+
+The script will confirm with you prior to acknowledging the alerts.
 
 Authentication:
     This script will attempt to authenticate with the CloudGenix controller
