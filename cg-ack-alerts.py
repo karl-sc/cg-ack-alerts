@@ -6,6 +6,15 @@ CloudGenix Alert Acknowledgment script
 
 This script will indiscriminately acknowledge all un-acknowledged alerts present on a users system.
 
+Site Filtering:
+    As an option an administrator may choose to only acknowledge select alerts relating to a specific
+    site. If this is the case an administrator may choose to leverage the optional parameter -s "sitename"
+    to only acknowledge events related to one site. Fuzzy matching will be used to pick the correct site.
+        
+        E.G.:   cg-ack-alerts.py -s "new york"
+    
+    The above example could match the site named "New York Branch 1"
+
 Authentication:
     This script will attempt to authenticate with the CloudGenix controller
     software using an Auth Token or through interactive authentication.
@@ -29,6 +38,9 @@ import cloudgenix
 import os
 import sys
 import argparse
+import cloudgenix_idname
+from fuzzywuzzy import fuzz
+
 
 CLIARGS = {}
 cgx_session = cloudgenix.API()              #Instantiate a new CG API Session for AUTH
@@ -45,6 +57,8 @@ def parse_arguments():
                     help='a file containing the authtoken')
     parser.add_argument('--limit', '-l', metavar='NUMBER_OF_EVENTS', type=int, default=0,
                     help='The max number of events to ack. Default 0 (UNLIMITED)')
+    parser.add_argument('--site-name', '-s', metavar='site_name', type=str, 
+                    help='(OPTIONAL) Specify a site to clear events for', default=" ")
     args = parser.parse_args()
     CLIARGS.update(vars(args)) ##ASSIGN ARGUMENTS to our DICT
     
@@ -86,7 +100,34 @@ def authenticate():
                 user_password = None            
     print("    ","SUCCESS: Authentication Complete")
 
+
+def match_site(sdk, idname, search_site):
+    print_array = []
+
+    search_ratio = 0
+    
+    if (search_site != " "):
+        resp = sdk.get.sites()
+        if resp.cgx_status:
+            site_list = resp.cgx_content.get("items", None)    #EVENT_LIST contains an list of all returned events
+            for site in site_list:                            #Loop through each EVENT in the EVENT_LIST
+                check_ratio = fuzz.ratio(search_site.lower(),site['name'].lower())
+                if (check_ratio > search_ratio ):
+                    site_id = site['id']
+                    site_name = site['name']
+                    
+                    search_ratio = check_ratio
+                    site_dict = site
+        else:
+            logout()
+            print("ERROR: " + "API Call failure when enumerating SITES in tenant! Exiting!" )
+            sys.exit(resp)
+        return (site_id, "for site '" + site_name + "'")
+    return ("", "")
+    
+
 def go():
+    
     resp = cgx_session.get.tenants()
     if resp.cgx_status:
         tenant_name = resp.cgx_content.get("name", None)
@@ -94,10 +135,16 @@ def go():
         logout()
         print("ERROR: API Call failure when enumerating TENANT Name! Exiting!")
         sys.exit((vars(resp)))
+
+    idname =  cloudgenix_idname.CloudGenixIDName(cgx_session)
+
+    search_site = CLIARGS['site_name']
+    (site_id, site_name) = match_site(cgx_session, idname, search_site)    
+
     if CLIARGS['limit'] == 0:
-        print("CONFIRMATION: This will acknowledge ALL events for",tenant_name)
+        print("CONFIRMATION: This will acknowledge ALL events for",tenant_name,site_name)
     else:
-        print("CONFIRMATION: This will acknowledge",CLIARGS['limit'],"events for",tenant_name)
+        print("CONFIRMATION: This will acknowledge",CLIARGS['limit'],"events for",tenant_name,site_name)
     input_response = ""
     while(input_response != "yes") and (input_response != "no"):
         input_response = str(input("Please enter YES or NO: ")).lower()
@@ -111,7 +158,7 @@ def go():
         limit = 999999  #Hidden Maximum is 100k entries
     ack_count = 0
     while (limit >= 100): #ONLY ACK 100 events at a time
-        event_request_query = '{"limit":{"count":100,"sort_on":"time","sort_order":"ascending"},"query":{"type":["alarm"]},"view":{"summary":false},"severity":[],"acknowledged":false}'
+        event_request_query = '{"limit":{"count":100,"sort_on":"time","sort_order":"ascending"},"query":{"site":["' + site_id + '"],"type":["alarm"]},"view":{"summary":false},"severity":[],"acknowledged":false}'
         resp = cgx_session.post.events_query(event_request_query)
         if resp.cgx_status:    
             event_list = resp.cgx_content.get("items", None) #EVENT_LIST contains an list of all returned events
@@ -123,9 +170,14 @@ def go():
                 acknowledged_event["acknowledged"] = "true"     #Set the copy of the event to have the ACKNOWLEDGED attribute set to TRUE!
                 clrresp = cgx_session.put.events(event['id'],acknowledged_event)    #PUT the copy of the ACKNOWLEDGED_EVENT into the event queue to ACKNOWLEDGE the EVENT!
                 print("    ",ack_count,": Cleared Event ID:", event['id'])         #PRINT some Debug information
+        else:
+            print("ERROR: API Error")
+            logout()
+            sys.exit(resp)
         limit = limit - 100
+
     
-    event_request_query = '{"limit":{"count":' + str(limit) + ',"sort_on":"time","sort_order":"ascending"},"query":{"type":["alarm"]},"view":{"summary":false},"severity":[],"acknowledged":false}'
+    event_request_query = '{"limit":{"count":' + str(limit) + ',"sort_on":"time","sort_order":"ascending"},"query":{"site":["' + site_id + '"],"type":["alarm"]},"view":{"summary":false},"severity":[],"acknowledged":false}'
     resp = cgx_session.post.events_query(event_request_query)
     if resp.cgx_status:
         event_list = resp.cgx_content.get("items", None)    #EVENT_LIST contains an list of all returned events
