@@ -17,15 +17,28 @@ USAGE:
          
   --limit NUMBER_OF_EVENTS, -l NUMBER_OF_EVENTS
         The max number of events to ack. Default 0 (UNLIMITED)
+        
+  --site-name site_name, -s site_name
+                        (OPTIONAL) Specify a site to clear events for
 
 Additional Info
 ---------------------------------------
 This script will indiscriminately acknowledge all un-acknowledged alerts present on a users system.
 
+Site Filtering
+---------------------------------------
+As an option an administrator may choose to only acknowledge select alerts relating to a specific
+site. If this is the case an administrator may choose to leverage the optional parameter -s "sitename"
+to only acknowledge events related to one site. Fuzzy matching will be used to pick the correct site.
+    E.G.:   cg-ack-alerts.py -s "new york"
+The above example could match the site named "New York Branch 1"
+ 
+Max Limit
+---------------------------------------
 A maxmum number of alerts to acknowledge may be set using the LIMIT parameter. It is recommended that this
 be set to a low number for testing purposes to ensure the correct tenant is set.
 
-The script will confirm with you prior to acknowledging the alerts.
+The script will confirm with you prior to acknowledging the alerts.=
 
 Authentication:
 ---------------------------------------
